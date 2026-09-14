@@ -1,0 +1,53 @@
+import { useState } from "react";
+import { SetupPage } from "./pages/Setup.js";
+import { CustomersPage } from "./pages/Customers.js";
+import { LiveEntity } from "./pages/LiveEntity.js";
+
+type Tab = "setup" | "customers" | "items" | "purchaseOrders";
+
+export function App() {
+  const [tab, setTab] = useState<Tab>("setup");
+
+  return (
+    <div className="app">
+      <header>
+        <h1>BC Data</h1>
+        <nav>
+          <button className={tab === "setup" ? "active" : ""} onClick={() => setTab("setup")}>
+            Setup
+          </button>
+          <button
+            className={tab === "customers" ? "active" : ""}
+            onClick={() => setTab("customers")}
+          >
+            Customers
+          </button>
+          <button className={tab === "items" ? "active" : ""} onClick={() => setTab("items")}>
+            Items (live)
+          </button>
+          <button
+            className={tab === "purchaseOrders" ? "active" : ""}
+            onClick={() => setTab("purchaseOrders")}
+          >
+            Purchase Orders (live)
+          </button>
+        </nav>
+      </header>
+      <main>
+        {tab === "setup" && <SetupPage />}
+        {tab === "customers" && <CustomersPage />}
+        {tab === "items" && (
+          <LiveEntity entity="items" title="Items — live from Business Central" />
+        )}
+        {tab === "purchaseOrders" && (
+          <LiveEntity
+            entity="purchaseOrders"
+            title="Purchase Orders — live from Business Central"
+            subtitle="Direct fields only, 30 per page (native BC paging). Select rows for bulk actions."
+            actions={[{ name: "receiveAndInvoice", label: "Receive and Invoice" }]}
+          />
+        )}
+      </main>
+    </div>
+  );
+}
