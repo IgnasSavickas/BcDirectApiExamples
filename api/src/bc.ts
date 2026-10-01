@@ -324,3 +324,116 @@ export async function bulkEntityAction(
       : { id: ids[i], ok: false, error: String(r.reason) },
   );
 }
+
+// ---------------------------------------------------------------------------
+// Marinar custom API (tenging/marinar/v1.0) — used by the Delivery Sheet's
+// "Create sales order" flow. Lives on a custom route, so these call navapi
+// with an explicit `route` instead of the default v2.0.
+// ---------------------------------------------------------------------------
+
+export const MARINAR_ROUTE = "tenging/marinar/v1.0";
+
+function escapeOData(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+/** Customer lookup (by number or name) from the custom API. */
+export async function marinarCustomers(setup: SetupRow, q: string): Promise<BcRecord[]> {
+  const client = makeClient(setup);
+  const company = await resolveCompany(client, setup);
+  const query: { select?: string[]; filter?: string; orderby?: string[] } = {
+    select: ["id", "number", "displayName", "city", "country"],
+    orderby: ["number"],
+  };
+  const term = q.trim();
+  if (term) {
+    const e = escapeOData(term);
+    // BC rejects OR across distinct fields, so pick one: digits → number, else name.
+    query.filter = /^\d/.test(term)
+      ? `contains(number,'${e}')`
+      : `contains(displayName,'${e}')`;
+  }
+  const res = await client.list("customers", { route: MARINAR_ROUTE, company, maxPageSize: 20, query });
+  return res.items;
+}
+
+/** Ship-to addresses for one customer, pre-filtered by customerNumber. */
+export async function marinarShipToAddresses(
+  setup: SetupRow,
+  customerNumber: string,
+): Promise<BcRecord[]> {
+  const client = makeClient(setup);
+  const company = await resolveCompany(client, setup);
+  const res = await client.list("shipToAddresses", {
+    route: MARINAR_ROUTE,
+    company,
+    maxPageSize: 100,
+    query: {
+      select: ["id", "customerNumber", "code", "displayName", "city", "country"],
+      filter: `customerNumber eq '${escapeOData(customerNumber)}'`,
+      orderby: ["code"],
+    },
+  });
+  return res.items;
+}
+
+/**
+ * The members of the BC `deliveryType` enum, read live from the custom API's
+ * $metadata (navapi parses entity sets but not enums, so we parse the XML).
+ */
+export async function marinarDeliveryTypes(setup: SetupRow): Promise<string[]> {
+  if (!setup.tenant_id || !setup.client_id || !setup.client_secret) {
+    throw new SetupError("Business Central connection is not configured.");
+  }
+  const auth = new ClientCredentialsAuth({
+    tenantId: setup.tenant_id,
+    clientId: setup.client_id,
+    clientSecret: setup.client_secret,
+  });
+  const token = await auth.getToken();
+  const baseUrl = setup.base_url || "https://api.businesscentral.dynamics.com";
+  const env = setup.environment || "Production";
+  const url = `${baseUrl}/v2.0/${setup.tenant_id}/${env}/api/${MARINAR_ROUTE}/$metadata`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new SetupError(`Could not read $metadata (HTTP ${res.status}).`);
+  const xml = await res.text();
+  const block = xml.match(/<EnumType[^>]*Name="deliveryType"[^>]*>([\s\S]*?)<\/EnumType>/i);
+  if (!block) return [];
+  return [...block[1].matchAll(/<Member[^>]*Name="([^"]+)"/g)].map((m) => m[1]);
+}
+
+export interface SalesOrderLineInput {
+  lineType: string; // e.g. "Item"
+  lineObjectNumber: string; // the item number
+  quantity: number;
+}
+
+export interface SalesOrderInput {
+  customerNumber: string;
+  shipToCode?: string;
+  deliveryType?: string;
+  orderDate?: string; // yyyy-mm-dd
+  lines?: SalesOrderLineInput[];
+}
+
+/**
+ * Creates a sales order on the custom API via a deep insert — the
+ * `salesOrderLines` are nested in the same POST, so header and lines are
+ * created in one request. Returns the created record (incl. the order number).
+ */
+export async function createMarinarSalesOrder(
+  setup: SetupRow,
+  input: SalesOrderInput,
+): Promise<BcRecord> {
+  if (!input.customerNumber) throw new SetupError("A customer is required.");
+  const client = makeClient(setup);
+  const company = await resolveCompany(client, setup);
+
+  const body: Record<string, unknown> = { customerNumber: input.customerNumber };
+  if (input.orderDate) body.orderDate = input.orderDate;
+  if (input.shipToCode) body.shipToCode = input.shipToCode;
+  if (input.deliveryType) body.deliveryType = input.deliveryType;
+  if (input.lines && input.lines.length) body.salesOrderLines = input.lines;
+
+  return client.create("salesOrders", body, { route: MARINAR_ROUTE, company });
+}

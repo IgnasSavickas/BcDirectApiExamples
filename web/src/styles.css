@@ -541,3 +541,120 @@ th.sortable:hover {
   font-size: 12px;
   line-height: 1;
 }
+
+/* Modal dialog (Add item, Create sales order) */
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 27, 38, 0.4);
+  z-index: 30;
+}
+
+.modal {
+  position: fixed;
+  z-index: 31;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(440px, 94vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(20, 27, 38, 0.28);
+  padding: 20px 22px 22px;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.modal-head h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.lookup-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.lookup-list li + li {
+  border-top: 1px solid var(--border);
+}
+
+.lookup-list button {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: #fff;
+  padding: 9px 12px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.lookup-list button:hover {
+  background: #eef4ff;
+}
+
+.lookup-list strong {
+  min-width: 90px;
+}
+
+.lookup-list span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.selected-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #f3f6fb;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+
+.selected-item span {
+  color: var(--muted);
+  font-size: 13px;
+  margin-left: 8px;
+}
+
+button.link,
+button.link-danger {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+}
+
+button.link {
+  color: var(--accent);
+}
+
+button.link-danger {
+  color: var(--err-text);
+}

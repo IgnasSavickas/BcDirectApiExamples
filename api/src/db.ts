@@ -77,7 +77,45 @@ export async function migrate(): Promise<void> {
       raw                    jsonb NOT NULL,
       synced_at              timestamptz NOT NULL DEFAULT now()
     );
+
+    CREATE TABLE IF NOT EXISTS delivery_sheet (
+      id          uuid PRIMARY KEY,
+      line_no     integer NOT NULL,
+      item_no     text NOT NULL,
+      quantity    numeric(18, 2) NOT NULL,
+      created_at  timestamptz NOT NULL DEFAULT now()
+    );
   `);
+}
+
+export interface DeliveryLine {
+  id: string;
+  line_no: number;
+  item_no: string;
+  quantity: string; // numeric comes back from pg as a string
+  created_at: string;
+}
+
+export async function listDeliverySheet(): Promise<DeliveryLine[]> {
+  const { rows } = await pool.query<DeliveryLine>(
+    "SELECT id, line_no, item_no, quantity, created_at FROM delivery_sheet ORDER BY line_no",
+  );
+  return rows;
+}
+
+export async function addDeliveryLine(itemNo: string, quantity: number): Promise<DeliveryLine> {
+  // line_no is assigned as the next sequential number on the sheet.
+  const { rows } = await pool.query<DeliveryLine>(
+    `INSERT INTO delivery_sheet (id, line_no, item_no, quantity)
+     VALUES ($1, (SELECT COALESCE(MAX(line_no), 0) + 1 FROM delivery_sheet), $2, $3)
+     RETURNING id, line_no, item_no, quantity, created_at`,
+    [crypto.randomUUID(), itemNo, quantity],
+  );
+  return rows[0];
+}
+
+export async function deleteDeliveryLine(id: string): Promise<void> {
+  await pool.query("DELETE FROM delivery_sheet WHERE id = $1", [id]);
 }
 
 export interface SetupRow {

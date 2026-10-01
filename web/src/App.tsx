@@ -2,8 +2,9 @@ import { useState } from "react";
 import { SetupPage } from "./pages/Setup.js";
 import { CustomersPage } from "./pages/Customers.js";
 import { LiveEntity } from "./pages/LiveEntity.js";
+import { DeliverySheet } from "./pages/DeliverySheet.js";
 
-type Tab = "setup" | "customers" | "items" | "purchaseOrders";
+type Tab = "setup" | "customers" | "items" | "purchaseOrders" | "delivery";
 
 export function App() {
   const [tab, setTab] = useState<Tab>("setup");
@@ -31,6 +32,12 @@ export function App() {
           >
             Purchase Orders (live)
           </button>
+          <button
+            className={tab === "delivery" ? "active" : ""}
+            onClick={() => setTab("delivery")}
+          >
+            Delivery Sheet
+          </button>
         </nav>
       </header>
       <main>
@@ -47,6 +54,7 @@ export function App() {
             actions={[{ name: "receiveAndInvoice", label: "Receive and Invoice" }]}
           />
         )}
+        {tab === "delivery" && <DeliverySheet />}
       </main>
     </div>
   );

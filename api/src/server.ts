@@ -1,7 +1,10 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import {
+  addDeliveryLine,
+  deleteDeliveryLine,
   getSetup,
+  listDeliverySheet,
   migrate,
   pool,
   saveSetup,
@@ -10,7 +13,12 @@ import {
 import {
   bulkEntityAction,
   callEntityAction,
+  createMarinarSalesOrder,
   entityFields,
+  marinarCustomers,
+  marinarDeliveryTypes,
+  marinarShipToAddresses,
+  type SalesOrderInput,
   entityNavigation,
   entityNavProperties,
   listCompanies,
@@ -113,6 +121,86 @@ app.get<{ Querystring: { q?: string; limit?: string } }>(
     return { customers: rows, count: rows.length };
   },
 );
+
+// --- Delivery sheet (persisted in Postgres) -------------------------------
+
+app.get("/api/delivery-sheet", async () => {
+  return { lines: await listDeliverySheet() };
+});
+
+app.post<{ Body: { item_no?: string; quantity?: number | string } }>(
+  "/api/delivery-sheet",
+  async (req, reply) => {
+    const itemNo = (req.body?.item_no ?? "").toString().trim();
+    const quantity = Number(req.body?.quantity);
+    if (!itemNo) return reply.status(400).send({ error: "item_no is required." });
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      return reply.status(400).send({ error: "quantity must be a positive number." });
+    }
+    // Round to 2 decimal places to match the column.
+    const line = await addDeliveryLine(itemNo, Math.round(quantity * 100) / 100);
+    return { line };
+  },
+);
+
+app.delete<{ Params: { id: string } }>("/api/delivery-sheet/:id", async (req) => {
+  await deleteDeliveryLine(req.params.id);
+  return { ok: true };
+});
+
+// --- Marinar custom API (Create sales order flow) -------------------------
+
+app.get<{ Querystring: { q?: string } }>("/api/marinar/customers", async (req, reply) => {
+  try {
+    return { customers: await marinarCustomers(await getSetup(), req.query.q ?? "") };
+  } catch (err) {
+    return reply.status(400).send({ error: describe(err) });
+  }
+});
+
+app.get<{ Querystring: { customerNumber?: string } }>(
+  "/api/marinar/ship-to-addresses",
+  async (req, reply) => {
+    try {
+      const cn = (req.query.customerNumber ?? "").trim();
+      if (!cn) return { shipToAddresses: [] };
+      return { shipToAddresses: await marinarShipToAddresses(await getSetup(), cn) };
+    } catch (err) {
+      return reply.status(400).send({ error: describe(err) });
+    }
+  },
+);
+
+app.get("/api/marinar/delivery-types", async (_req, reply) => {
+  try {
+    return { deliveryTypes: await marinarDeliveryTypes(await getSetup()) };
+  } catch (err) {
+    return reply.status(400).send({ error: describe(err) });
+  }
+});
+
+app.post<{ Body: SalesOrderInput }>("/api/marinar/sales-orders", async (req, reply) => {
+  try {
+    // The order's lines come from the current delivery sheet, mapped to the
+    // custom API's salesOrderLines shape (lineType / lineObjectNumber / quantity).
+    const sheet = await listDeliverySheet();
+    const lines = sheet.map((l) => ({
+      lineType: "Item",
+      lineObjectNumber: l.item_no,
+      quantity: Number(l.quantity),
+    }));
+    const order = await createMarinarSalesOrder(await getSetup(), {
+      customerNumber: (req.body?.customerNumber ?? "").trim(),
+      shipToCode: req.body?.shipToCode?.trim() || undefined,
+      deliveryType: req.body?.deliveryType?.trim() || undefined,
+      orderDate: req.body?.orderDate?.trim() || undefined,
+      lines,
+    });
+    return { order };
+  } catch (err) {
+    return reply.status(400).send({ error: describe(err) });
+  }
+});
 
 // --- Live entities: served directly from BC, no database ------------------
 

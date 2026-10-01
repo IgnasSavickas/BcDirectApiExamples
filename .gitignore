@@ -2,6 +2,10 @@
 node_modules/
 dist/
 *.log
+*.tsbuildinfo
+
+# macOS
+.DS_Store
 
 # .NET / Aspire
 bin/

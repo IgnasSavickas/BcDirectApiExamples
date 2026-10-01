@@ -60,6 +60,14 @@ export interface LiveQuery {
   orderby?: string[];
 }
 
+export interface DeliveryLine {
+  id: string;
+  line_no: number;
+  item_no: string;
+  quantity: string;
+  created_at: string;
+}
+
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
   // Only send a JSON content-type when there is actually a body — otherwise
   // Fastify rejects the empty body with FST_ERR_CTP_EMPTY_JSON_BODY (400).
@@ -117,4 +125,44 @@ export const api = {
       `/api/live/${entity}/actions/${encodeURIComponent(action)}`,
       { method: "POST", body: JSON.stringify({ ids, parameters }) },
     ),
+
+  // Delivery sheet (persisted)
+  getDeliverySheet: () => req<{ lines: DeliveryLine[] }>("/api/delivery-sheet"),
+  addDeliveryLine: (item_no: string, quantity: number) =>
+    req<{ line: DeliveryLine }>("/api/delivery-sheet", {
+      method: "POST",
+      body: JSON.stringify({ item_no, quantity }),
+    }),
+  deleteDeliveryLine: (id: string) =>
+    req<{ ok: true }>(`/api/delivery-sheet/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  // Marinar custom API (Create sales order)
+  marinarCustomers: (q: string) =>
+    req<{ customers: Rec[] }>(`/api/marinar/customers?q=${encodeURIComponent(q)}`),
+  marinarShipTo: (customerNumber: string) =>
+    req<{ shipToAddresses: Rec[] }>(
+      `/api/marinar/ship-to-addresses?customerNumber=${encodeURIComponent(customerNumber)}`,
+    ),
+  marinarDeliveryTypes: () =>
+    req<{ deliveryTypes: string[] }>("/api/marinar/delivery-types"),
+  createSalesOrder: (input: {
+    customerNumber: string;
+    shipToCode?: string;
+    deliveryType?: string;
+    orderDate?: string;
+  }) =>
+    req<{ order: Rec }>("/api/marinar/sales-orders", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  // Live item lookup by number (reuses the generic live endpoint with $select + $filter).
+  // BC rejects OR across distinct fields, so we filter on the number only.
+  lookupItems: (q: string) => {
+    const esc = q.replace(/'/g, "''");
+    return api.getLive("items", {
+      select: ["id", "number", "displayName", "baseUnitOfMeasureCode"],
+      filter: `contains(number,'${esc}')`,
+      orderby: ["number"],
+    });
+  },
 };
