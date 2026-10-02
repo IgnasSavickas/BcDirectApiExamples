@@ -137,15 +137,26 @@ export const LIVE_PAGE_SIZE = 30;
  * is allowed to invoke. Acts as an allow-list so a caller can never point the
  * generic routes at an arbitrary entity or action.
  */
-export const LIVE_ENTITIES: Record<string, { label: string; actions: string[] }> = {
-  items: { label: "Items", actions: [] },
-  purchaseOrders: { label: "Purchase Orders", actions: ["receiveAndInvoice"] },
+export const LIVE_ENTITIES: Record<
+  string,
+  { label: string; route: string; actions: string[] }
+> = {
+  items: { label: "Items", route: STANDARD_ROUTE, actions: [] },
+  purchaseOrders: { label: "Purchase Orders", route: STANDARD_ROUTE, actions: ["receiveAndInvoice"] },
+  // Sales orders live on the Marinar custom API, not the standard v2.0 route.
+  salesOrders: { label: "Sales Orders", route: "tenging/marinar/v1.0", actions: [] },
 };
 
 export function assertEntity(entity: string): void {
   if (!Object.prototype.hasOwnProperty.call(LIVE_ENTITIES, entity)) {
     throw new SetupError(`Unknown live entity: ${entity}`);
   }
+}
+
+/** The API route an entity is served from (defaults to the standard v2.0). */
+function routeOf(entity: string): string {
+  assertEntity(entity);
+  return LIVE_ENTITIES[entity].route || STANDARD_ROUTE;
 }
 
 function assertAction(entity: string, action: string): void {
@@ -201,7 +212,12 @@ export async function listEntity(
   if (opts.filter) query.filter = opts.filter;
   if (opts.orderby && opts.orderby.length) query.orderby = opts.orderby;
 
-  const res = await client.list(entity, { company, maxPageSize: LIVE_PAGE_SIZE, query });
+  const res = await client.list(entity, {
+    route: routeOf(entity),
+    company,
+    maxPageSize: LIVE_PAGE_SIZE,
+    query,
+  });
   return { items: res.items, nextLink: res.nextLink };
 }
 
@@ -209,22 +225,87 @@ export interface EntityField {
   name: string;
   /** EDM type, e.g. Edm.String, Edm.Decimal, Edm.Boolean, Edm.Date. */
   type: string;
+  /** When the type is an enum, the allowed member names (for a dropdown). */
+  enumMembers?: string[];
+}
+
+/**
+ * Fetches a route's raw $metadata XML. navapi's getMetadata only surfaces the
+ * generic API-catalog entity sets for custom routes, so for those we parse the
+ * XML ourselves to recover real fields and enum members.
+ */
+async function fetchRouteMetadataXml(setup: SetupRow, route: string): Promise<string> {
+  if (!setup.tenant_id || !setup.client_id || !setup.client_secret) {
+    throw new SetupError("Business Central connection is not configured.");
+  }
+  const auth = new ClientCredentialsAuth({
+    tenantId: setup.tenant_id,
+    clientId: setup.client_id,
+    clientSecret: setup.client_secret,
+  });
+  const token = await auth.getToken();
+  const baseUrl = setup.base_url || "https://api.businesscentral.dynamics.com";
+  const env = setup.environment || "Production";
+  const url = `${baseUrl}/v2.0/${setup.tenant_id}/${env}/api/${route}/$metadata`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new SetupError(`Could not read $metadata (HTTP ${res.status}).`);
+  return res.text();
+}
+
+/** Parses an entity set's fields (with enum members) out of raw $metadata XML. */
+function parseEntityFields(xml: string, entitySet: string): EntityField[] {
+  const set = xml.match(new RegExp(`<EntitySet Name="${entitySet}" EntityType="([^"]+)"`));
+  if (!set) return [];
+  const typeLocal = set[1].split(".").pop();
+  const type = xml.match(new RegExp(`<EntityType Name="${typeLocal}">([\\s\\S]*?)</EntityType>`));
+  if (!type) return [];
+
+  // OData escapes characters not allowed in identifiers, e.g. a space becomes
+  // `_x0020_`. Decode so members display and PATCH as their real values.
+  const decode = (s: string) =>
+    s.replace(/_x([0-9A-Fa-f]{4})_/g, (_m, hex) => String.fromCharCode(parseInt(hex, 16)));
+
+  const enums: Record<string, string[]> = {};
+  for (const m of xml.matchAll(/<EnumType[^>]*Name="([^"]+)"[^>]*>([\s\S]*?)<\/EnumType>/g)) {
+    enums[m[1]] = [...m[2].matchAll(/<Member[^>]*Name="([^"]+)"/g)].map((x) => decode(x[1]));
+  }
+
+  const fields: EntityField[] = [];
+  for (const p of type[1].matchAll(/<Property Name="([^"]+)" Type="([^"]+)"/g)) {
+    const edmType = p[2];
+    const local = edmType.split(".").pop() ?? edmType;
+    const field: EntityField = { name: p[1], type: edmType };
+    if (enums[local]) field.enumMembers = enums[local];
+    fields.push(field);
+  }
+  return fields;
+}
+
+/** The scalar fields an entity exposes on a given route. */
+export async function fieldsForRoute(
+  setup: SetupRow,
+  route: string,
+  entity: string,
+): Promise<EntityField[]> {
+  if (route === STANDARD_ROUTE) {
+    const client = makeClient(setup);
+    const cached = await client.getMetadata(STANDARD_ROUTE);
+    const found = cached.metadata.entitySets.find((e) => e.name === entity);
+    return found ? found.properties.map((p) => ({ name: p.name, type: p.type })) : [];
+  }
+  const xml = await fetchRouteMetadataXml(setup, route);
+  return parseEntityFields(xml, entity);
 }
 
 /** The scalar fields an entity exposes (for the column / filter / sort UI). */
 export async function entityFields(setup: SetupRow, entity: string): Promise<EntityField[]> {
-  assertEntity(entity);
-  const client = makeClient(setup);
-  const cached = await client.getMetadata(STANDARD_ROUTE);
-  const found = cached.metadata.entitySets.find((e) => e.name === entity);
-  return found ? found.properties.map((p) => ({ name: p.name, type: p.type })) : [];
+  return fieldsForRoute(setup, routeOf(entity), entity);
 }
 
 /** The navigation (expand) properties an entity exposes, from $metadata. */
 export async function entityNavProperties(setup: SetupRow, entity: string): Promise<string[]> {
-  assertEntity(entity);
   const client = makeClient(setup);
-  const cached = await client.getMetadata(STANDARD_ROUTE);
+  const cached = await client.getMetadata(routeOf(entity));
   const found = cached.metadata.entitySets.find((e) => e.name === entity);
   return found ? found.navigationProperties.map((n) => n.name) : [];
 }
@@ -250,7 +331,7 @@ export async function entityNavigation(
   }
   const client = makeClient(setup);
   const company = await resolveCompany(client, setup);
-  return client.getNavigation(entity, id, navProperty, { company });
+  return client.getNavigation(entity, id, navProperty, { route: routeOf(entity), company });
 }
 
 // --- Bound actions --------------------------------------------------------
@@ -273,7 +354,11 @@ async function invokeAction(
   parameters?: unknown,
 ): Promise<ActionOutcome> {
   try {
-    const result = await client.callAction(entity, id, action, { company, parameters });
+    const result = await client.callAction(entity, id, action, {
+      route: routeOf(entity),
+      company,
+      parameters,
+    });
     return { id, ok: true, result: result ?? null };
   } catch (err) {
     return { id, ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -382,24 +467,77 @@ export async function marinarShipToAddresses(
  * $metadata (navapi parses entity sets but not enums, so we parse the XML).
  */
 export async function marinarDeliveryTypes(setup: SetupRow): Promise<string[]> {
-  if (!setup.tenant_id || !setup.client_id || !setup.client_secret) {
-    throw new SetupError("Business Central connection is not configured.");
-  }
-  const auth = new ClientCredentialsAuth({
-    tenantId: setup.tenant_id,
-    clientId: setup.client_id,
-    clientSecret: setup.client_secret,
-  });
-  const token = await auth.getToken();
-  const baseUrl = setup.base_url || "https://api.businesscentral.dynamics.com";
-  const env = setup.environment || "Production";
-  const url = `${baseUrl}/v2.0/${setup.tenant_id}/${env}/api/${MARINAR_ROUTE}/$metadata`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) throw new SetupError(`Could not read $metadata (HTTP ${res.status}).`);
-  const xml = await res.text();
+  const xml = await fetchRouteMetadataXml(setup, MARINAR_ROUTE);
   const block = xml.match(/<EnumType[^>]*Name="deliveryType"[^>]*>([\s\S]*?)<\/EnumType>/i);
   if (!block) return [];
   return [...block[1].matchAll(/<Member[^>]*Name="([^"]+)"/g)].map((m) => m[1]);
+}
+
+// --- Sales order header + lines: read one, patch, delete ------------------
+
+const MARINAR_WRITE_ENTITIES = new Set(["salesOrders", "salesOrderLines"]);
+
+function assertMarinarEntity(entity: string): void {
+  if (!MARINAR_WRITE_ENTITIES.has(entity)) {
+    throw new SetupError(`Entity '${entity}' is not editable here.`);
+  }
+}
+
+/** Fields (with enum members) for a Marinar entity — card + line-grid editors. */
+export async function marinarFields(setup: SetupRow, entity: string): Promise<EntityField[]> {
+  assertMarinarEntity(entity);
+  return fieldsForRoute(setup, MARINAR_ROUTE, entity);
+}
+
+/** One full record from the Marinar API. */
+export async function getMarinarRecord(
+  setup: SetupRow,
+  entity: string,
+  id: string,
+): Promise<BcRecord> {
+  assertMarinarEntity(entity);
+  const client = makeClient(setup);
+  const company = await resolveCompany(client, setup);
+  return client.getRecord(entity, id, { route: MARINAR_ROUTE, company });
+}
+
+/** PATCH only the supplied (changed) fields. navapi manages the ETag. */
+export async function updateMarinarRecord(
+  setup: SetupRow,
+  entity: string,
+  id: string,
+  patch: Record<string, unknown>,
+): Promise<BcRecord> {
+  assertMarinarEntity(entity);
+  if (!patch || Object.keys(patch).length === 0) {
+    throw new SetupError("No changes to submit.");
+  }
+  const client = makeClient(setup);
+  const company = await resolveCompany(client, setup);
+  return client.update(entity, id, patch, { route: MARINAR_ROUTE, company });
+}
+
+/** DELETE a record. navapi manages the ETag. */
+export async function deleteMarinarRecord(
+  setup: SetupRow,
+  entity: string,
+  id: string,
+): Promise<void> {
+  assertMarinarEntity(entity);
+  const client = makeClient(setup);
+  const company = await resolveCompany(client, setup);
+  await client.deleteRecord(entity, id, { route: MARINAR_ROUTE, company });
+}
+
+/** The lines of one sales order, via the salesOrderLines navigation. */
+export async function marinarOrderLines(setup: SetupRow, orderId: string): Promise<BcRecord[]> {
+  const client = makeClient(setup);
+  const company = await resolveCompany(client, setup);
+  const nav = await client.getNavigation("salesOrders", orderId, "salesOrderLines", {
+    route: MARINAR_ROUTE,
+    company,
+  });
+  return nav.items;
 }
 
 export interface SalesOrderLineInput {

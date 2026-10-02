@@ -51,6 +51,7 @@ export interface LiveEntityConfig {
 export interface EntityField {
   name: string;
   type: string;
+  enumMembers?: string[];
 }
 
 export interface LiveQuery {
@@ -165,4 +166,26 @@ export const api = {
       orderby: ["number"],
     });
   },
+
+  // Sales order card + lines (Marinar custom API)
+  marinarFields: (entity: string) =>
+    req<{ fields: EntityField[] }>(`/api/marinar/fields/${encodeURIComponent(entity)}`),
+  getSalesOrder: (id: string) =>
+    req<{ order: Rec }>(`/api/marinar/sales-orders/${encodeURIComponent(id)}`),
+  patchSalesOrder: (id: string, patch: Record<string, unknown>) =>
+    req<{ order: Rec }>(`/api/marinar/sales-orders/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  deleteSalesOrder: (id: string) =>
+    req<{ ok: true }>(`/api/marinar/sales-orders/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+  getSalesOrderLines: (id: string) =>
+    req<{ lines: Rec[] }>(`/api/marinar/sales-orders/${encodeURIComponent(id)}/lines`),
+  patchSalesOrderLine: (id: string, patch: Record<string, unknown>) =>
+    req<{ line: Rec }>(`/api/marinar/sales-order-lines/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
 };

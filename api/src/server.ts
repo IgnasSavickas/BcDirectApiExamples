@@ -14,10 +14,15 @@ import {
   bulkEntityAction,
   callEntityAction,
   createMarinarSalesOrder,
+  deleteMarinarRecord,
   entityFields,
+  getMarinarRecord,
   marinarCustomers,
   marinarDeliveryTypes,
+  marinarFields,
+  marinarOrderLines,
   marinarShipToAddresses,
+  updateMarinarRecord,
   type SalesOrderInput,
   entityNavigation,
   entityNavProperties,
@@ -201,6 +206,82 @@ app.post<{ Body: SalesOrderInput }>("/api/marinar/sales-orders", async (req, rep
     return reply.status(400).send({ error: describe(err) });
   }
 });
+
+// Fields (with enum members) for a Marinar entity — the order card + line grid.
+app.get<{ Params: { entity: string } }>("/api/marinar/fields/:entity", async (req, reply) => {
+  try {
+    return { fields: await marinarFields(await getSetup(), req.params.entity) };
+  } catch (err) {
+    return reply.status(400).send({ error: describe(err) });
+  }
+});
+
+// One full sales order (card view).
+app.get<{ Params: { id: string } }>("/api/marinar/sales-orders/:id", async (req, reply) => {
+  try {
+    return { order: await getMarinarRecord(await getSetup(), "salesOrders", req.params.id) };
+  } catch (err) {
+    return reply.status(400).send({ error: describe(err) });
+  }
+});
+
+// PATCH the sales order header with only the changed fields.
+app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>(
+  "/api/marinar/sales-orders/:id",
+  async (req, reply) => {
+    try {
+      const order = await updateMarinarRecord(
+        await getSetup(),
+        "salesOrders",
+        req.params.id,
+        req.body ?? {},
+      );
+      return { order };
+    } catch (err) {
+      return reply.status(400).send({ error: describe(err) });
+    }
+  },
+);
+
+// DELETE the sales order.
+app.delete<{ Params: { id: string } }>("/api/marinar/sales-orders/:id", async (req, reply) => {
+  try {
+    await deleteMarinarRecord(await getSetup(), "salesOrders", req.params.id);
+    return { ok: true };
+  } catch (err) {
+    return reply.status(400).send({ error: describe(err) });
+  }
+});
+
+// The order's lines (bottom grid).
+app.get<{ Params: { id: string } }>(
+  "/api/marinar/sales-orders/:id/lines",
+  async (req, reply) => {
+    try {
+      return { lines: await marinarOrderLines(await getSetup(), req.params.id) };
+    } catch (err) {
+      return reply.status(400).send({ error: describe(err) });
+    }
+  },
+);
+
+// PATCH one sales order line with only the changed fields.
+app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>(
+  "/api/marinar/sales-order-lines/:id",
+  async (req, reply) => {
+    try {
+      const line = await updateMarinarRecord(
+        await getSetup(),
+        "salesOrderLines",
+        req.params.id,
+        req.body ?? {},
+      );
+      return { line };
+    } catch (err) {
+      return reply.status(400).send({ error: describe(err) });
+    }
+  },
+);
 
 // --- Live entities: served directly from BC, no database ------------------
 

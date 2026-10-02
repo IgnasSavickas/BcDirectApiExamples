@@ -110,9 +110,11 @@ export interface LiveEntityProps {
   title: string;
   subtitle?: string;
   actions?: ActionConfig[];
+  /** When set, clicking a row calls this instead of opening the drill-down drawer. */
+  onOpen?: (row: Rec) => void;
 }
 
-export function LiveEntity({ entity, title, subtitle, actions = [] }: LiveEntityProps) {
+export function LiveEntity({ entity, title, subtitle, actions = [], onOpen }: LiveEntityProps) {
   const hasActions = actions.length > 0;
 
   const [rows, setRows] = useState<Rec[]>([]);
@@ -405,7 +407,11 @@ export function LiveEntity({ entity, title, subtitle, actions = [] }: LiveEntity
               {rows.map((r, i) => {
                 const id = fmt(r.id);
                 return (
-                  <tr key={id || i} className="clickable" onClick={() => setSelected(r)}>
+                  <tr
+                    key={id || i}
+                    className="clickable"
+                    onClick={() => (onOpen ? onOpen(r) : setSelected(r))}
+                  >
                     {hasActions && (
                       <td className="check" onClick={(e) => e.stopPropagation()}>
                         <input
