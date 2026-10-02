@@ -453,7 +453,7 @@ function opLabel(op: string): string {
   return all.find(([v]) => v === op)?.[1] ?? op;
 }
 
-function ColumnsMenu(props: {
+export function ColumnsMenu(props: {
   fields: EntityField[];
   visible: Set<string>;
   onToggle: (name: string) => void;

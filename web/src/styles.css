@@ -804,3 +804,87 @@ table.grid-edit td.cell-dirty select {
 tr.row-dirty td:first-child {
   box-shadow: inset 3px 0 0 var(--accent);
 }
+
+/* Planning worksheet (per-line CONFIRM / DELETE) */
+table.grid-edit .row-actions {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--card);
+  max-width: none;
+  overflow: visible;
+}
+
+table.grid-edit td.row-actions button {
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  margin-right: 4px;
+}
+
+tr.row-new td {
+  background: #f3fbf5;
+}
+
+tr.row-new td:first-child {
+  box-shadow: inset 3px 0 0 var(--ok-text);
+}
+
+tr.row-msg td {
+  padding: 0 4px 6px;
+  max-width: none;
+  white-space: normal;
+}
+
+tr.row-msg .msg {
+  margin-top: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.filter-bar {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: #f7f8fa;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.batch-filter {
+  width: 320px;
+}
+
+.batch-field {
+  display: flex;
+  gap: 4px;
+}
+
+.batch-field input {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.batch-field button {
+  padding: 4px 10px;
+}
+
+.lookup-list button.picked {
+  background: #eaf1ff;
+}
+
+/* Cell drill-down ("…") for lookup fields */
+.cell-lookup {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+table.grid-edit .cell-lookup button {
+  padding: 2px 7px;
+  font-size: 12px;
+  line-height: 1.2;
+}

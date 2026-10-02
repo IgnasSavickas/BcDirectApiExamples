@@ -4,8 +4,16 @@ import { CustomersPage } from "./pages/Customers.js";
 import { LiveEntity } from "./pages/LiveEntity.js";
 import { DeliverySheet } from "./pages/DeliverySheet.js";
 import { SalesOrders } from "./pages/SalesOrders.js";
+import { PlanningWorksheet } from "./pages/PlanningWorksheet.js";
 
-type Tab = "setup" | "customers" | "items" | "purchaseOrders" | "salesOrders" | "delivery";
+type Tab =
+  | "setup"
+  | "customers"
+  | "items"
+  | "purchaseOrders"
+  | "salesOrders"
+  | "planning"
+  | "delivery";
 
 export function App() {
   const [tab, setTab] = useState<Tab>("setup");
@@ -40,6 +48,12 @@ export function App() {
             Sales Orders (live)
           </button>
           <button
+            className={tab === "planning" ? "active" : ""}
+            onClick={() => setTab("planning")}
+          >
+            Planning worksheet
+          </button>
+          <button
             className={tab === "delivery" ? "active" : ""}
             onClick={() => setTab("delivery")}
           >
@@ -62,6 +76,7 @@ export function App() {
           />
         )}
         {tab === "salesOrders" && <SalesOrders />}
+        {tab === "planning" && <PlanningWorksheet />}
         {tab === "delivery" && <DeliverySheet />}
       </main>
     </div>

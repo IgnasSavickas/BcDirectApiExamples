@@ -145,6 +145,11 @@ export const LIVE_ENTITIES: Record<
   purchaseOrders: { label: "Purchase Orders", route: STANDARD_ROUTE, actions: ["receiveAndInvoice"] },
   // Sales orders live on the Marinar custom API, not the standard v2.0 route.
   salesOrders: { label: "Sales Orders", route: "tenging/marinar/v1.0", actions: [] },
+  planningOrders: { label: "Planning Worksheet", route: "tenging/marinar/v1.0", actions: [] },
+  // Read-only lookup for the worksheet's Batch Name filter.
+  planningBatches: { label: "Planning Batches", route: "tenging/marinar/v1.0", actions: [] },
+  // Read-only lookup for the worksheet's locationCode drill-down.
+  locations: { label: "Locations", route: "tenging/marinar/v1.0", actions: [] },
 };
 
 export function assertEntity(entity: string): void {
@@ -473,9 +478,9 @@ export async function marinarDeliveryTypes(setup: SetupRow): Promise<string[]> {
   return [...block[1].matchAll(/<Member[^>]*Name="([^"]+)"/g)].map((m) => m[1]);
 }
 
-// --- Sales order header + lines: read one, patch, delete ------------------
+// --- Editable Marinar records: read one, create, patch, delete ------------
 
-const MARINAR_WRITE_ENTITIES = new Set(["salesOrders", "salesOrderLines"]);
+const MARINAR_WRITE_ENTITIES = new Set(["salesOrders", "salesOrderLines", "planningOrders"]);
 
 function assertMarinarEntity(entity: string): void {
   if (!MARINAR_WRITE_ENTITIES.has(entity)) {
@@ -499,6 +504,21 @@ export async function getMarinarRecord(
   const client = makeClient(setup);
   const company = await resolveCompany(client, setup);
   return client.getRecord(entity, id, { route: MARINAR_ROUTE, company });
+}
+
+/** POST a new record with the supplied fields. Returns the created record. */
+export async function createMarinarRecord(
+  setup: SetupRow,
+  entity: string,
+  body: Record<string, unknown>,
+): Promise<BcRecord> {
+  assertMarinarEntity(entity);
+  if (!body || Object.keys(body).length === 0) {
+    throw new SetupError("Fill in at least one field.");
+  }
+  const client = makeClient(setup);
+  const company = await resolveCompany(client, setup);
+  return client.create(entity, body, { route: MARINAR_ROUTE, company });
 }
 
 /** PATCH only the supplied (changed) fields. navapi manages the ETag. */
