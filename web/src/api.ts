@@ -188,4 +188,20 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(patch),
     }),
+
+  // Planning worksheet (Marinar planningOrders); the list uses getLive("planningOrders").
+  createPlanningOrder: (body: Record<string, unknown>) =>
+    req<{ line: Rec }>("/api/marinar/planning-orders", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  patchPlanningOrder: (id: string, patch: Record<string, unknown>) =>
+    req<{ line: Rec }>(`/api/marinar/planning-orders/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  deletePlanningOrder: (id: string) =>
+    req<{ ok: true }>(`/api/marinar/planning-orders/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
 };

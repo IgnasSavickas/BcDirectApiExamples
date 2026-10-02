@@ -13,6 +13,7 @@ import {
 import {
   bulkEntityAction,
   callEntityAction,
+  createMarinarRecord,
   createMarinarSalesOrder,
   deleteMarinarRecord,
   entityFields,
@@ -277,6 +278,47 @@ app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>(
         req.body ?? {},
       );
       return { line };
+    } catch (err) {
+      return reply.status(400).send({ error: describe(err) });
+    }
+  },
+);
+
+// --- Planning worksheet (Marinar planningOrders): create / patch / delete --
+// The list itself is served by the generic live route (/api/live/planningOrders).
+
+app.post<{ Body: Record<string, unknown> }>("/api/marinar/planning-orders", async (req, reply) => {
+  try {
+    const line = await createMarinarRecord(await getSetup(), "planningOrders", req.body ?? {});
+    return { line };
+  } catch (err) {
+    return reply.status(400).send({ error: describe(err) });
+  }
+});
+
+app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>(
+  "/api/marinar/planning-orders/:id",
+  async (req, reply) => {
+    try {
+      const line = await updateMarinarRecord(
+        await getSetup(),
+        "planningOrders",
+        req.params.id,
+        req.body ?? {},
+      );
+      return { line };
+    } catch (err) {
+      return reply.status(400).send({ error: describe(err) });
+    }
+  },
+);
+
+app.delete<{ Params: { id: string } }>(
+  "/api/marinar/planning-orders/:id",
+  async (req, reply) => {
+    try {
+      await deleteMarinarRecord(await getSetup(), "planningOrders", req.params.id);
+      return { ok: true };
     } catch (err) {
       return reply.status(400).send({ error: describe(err) });
     }
