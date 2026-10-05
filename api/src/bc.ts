@@ -144,7 +144,7 @@ export const LIVE_ENTITIES: Record<
   items: { label: "Items", route: STANDARD_ROUTE, actions: [] },
   purchaseOrders: { label: "Purchase Orders", route: STANDARD_ROUTE, actions: ["receiveAndInvoice"] },
   // Sales orders live on the Marinar custom API, not the standard v2.0 route.
-  salesOrders: { label: "Sales Orders", route: "tenging/marinar/v1.0", actions: [] },
+  salesOrders: { label: "Sales Orders", route: "tenging/marinar/v1.0", actions: ["createPick"] },
   planningOrders: { label: "Planning Worksheet", route: "tenging/marinar/v1.0", actions: [] },
   // Read-only lookup for the worksheet's Batch Name filter.
   planningBatches: { label: "Planning Batches", route: "tenging/marinar/v1.0", actions: [] },

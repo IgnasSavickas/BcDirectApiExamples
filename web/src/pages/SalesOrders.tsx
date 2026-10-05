@@ -34,6 +34,8 @@ function SalesOrderCard(props: { id: string; onBack: () => void }) {
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmPick, setConfirmPick] = useState(false);
+  const [picking, setPicking] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -97,6 +99,26 @@ function SalesOrderCard(props: { id: string; onBack: () => void }) {
     }
   }
 
+  /** Runs the createPick bound action (warehouse pick for this order) in BC. */
+  async function doCreatePick() {
+    setConfirmPick(false);
+    setPicking(true);
+    setResult(null);
+    try {
+      const { outcome } = await api.runAction("salesOrders", id, "createPick");
+      if (outcome.ok) {
+        setResult({ ok: true, text: "Pick created." });
+        load(); // the order may have changed (e.g. status)
+      } else {
+        setResult({ ok: false, text: outcome.error ?? "Create Pick failed." });
+      }
+    } catch (e) {
+      setResult({ ok: false, text: (e as Error).message });
+    } finally {
+      setPicking(false);
+    }
+  }
+
   const title = order ? `Sales Order ${fmt(order.number)}` : "Sales Order";
 
   return (
@@ -111,6 +133,26 @@ function SalesOrderCard(props: { id: string; onBack: () => void }) {
           <button className="primary" onClick={submit} disabled={saving || dirty.length === 0}>
             {saving ? "Submitting…" : "Submit changes"}
           </button>
+          {!confirmPick ? (
+            <button
+              onClick={() => setConfirmPick(true)}
+              disabled={!order || picking || dirty.length > 0}
+              title={
+                dirty.length > 0
+                  ? "Submit or discard your changes first — Create Pick runs on the saved order"
+                  : "Create a warehouse pick for this order in Business Central"
+              }
+            >
+              {picking ? "Creating pick…" : "Create Pick"}
+            </button>
+          ) : (
+            <>
+              <button className="primary" onClick={doCreatePick}>
+                Confirm create pick
+              </button>
+              <button onClick={() => setConfirmPick(false)}>Cancel</button>
+            </>
+          )}
           {!confirmDelete ? (
             <button className="danger" onClick={() => setConfirmDelete(true)} disabled={deleting}>
               Delete order
